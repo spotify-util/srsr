@@ -13,12 +13,12 @@ const CURRENT_VERSION = "0.3.3B",
         INITIAL_VALS: { //these are never modified
             HIPSTER: 30,
             NEW: 5,
-            MAX_OFFSET: 1900
+            MAX_OFFSET: 950
         },
         //add rollHipster/rollNew funcs but make it a class!
         HIPSTER: 30, //percent chance of adding hipster tag
         NEW: 5, //percent chance of adding new tag
-        MAX_OFFSET: 1900, //max offset possible to generate
+        MAX_OFFSET: 950, //max offset possible to generate | UPDATED 2021-02-25 after program encountered several 404 errors with 1900 offset
         resetVals: function () {
             this.HIPSTER = this.INITIAL_VALS.HIPSTER;
             this.NEW = this.INITIAL_VALS.NEW;
@@ -173,7 +173,7 @@ function okToRecursivelyFix(error_obj) {
     //determine if an error object is an api rate issue that can be fixed by calling it again,
     //or an error on our end (such as syntax) that can't be fixed by recalling the api
     console.log("checking if err is ok to recursively fix", error_obj);
-    if (error_obj.status >= 429) return true;
+    if (error_obj.status >= 429 || error_obj.status == 404) return true;
     else {
         console.log("err NOT ok to recursively fix", error_obj);
         return false
