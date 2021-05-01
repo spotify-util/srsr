@@ -1,4 +1,5 @@
 import { credentials } from "./credentials.js";
+import { CustomLocalStorage } from "../../spotify-util/js/customLocalStorage.js";
 import * as randomWords from "./random-words.js";
 const CURRENT_VERSION = "0.3.3B",
     REFRESH_RATE = { //used to control API rate limiting
@@ -60,37 +61,21 @@ const CURRENT_VERSION = "0.3.3B",
         }
     };
 
-var customLocalStorage = {
-        getContent: function() {
-            if(!localStorage.hasOwnProperty('spotify_util') || !JSON.parse(localStorage.getItem('spotify_util')).hasOwnProperty("srsr")) localStorage.setItem('spotify_util', JSON.stringify({ ...JSON.parse(localStorage.getItem('spotify_util')), srsr:{} }));
-            return JSON.parse(localStorage.getItem("spotify_util"))["srsr"] || {};
-        },
-        set: function(key, val) {
-            //val can be a js obj, we'll convert it all in here
-            let new_storage_obj = { 
-                ...JSON.parse(localStorage.getItem("spotify_util")),    //import all of spotiy_util because we are going to update all of spotify_util (want to make sure we dont lose the other keys)
-                srsr: {                 //override the srsr key specifically
-                    ...this.content,    //carry over everything from srsr
-                    [key]:val           //then overwrite the given key with the given value
-                } 
-            };
-            localStorage.setItem("spotify_util", JSON.stringify(new_storage_obj));  //stringify and set the new obj
-        }
-    },
-    database,
-    cached_data,
-    user_credentials = null,
-    global_track_count = 20,
-    recursive_operations = {missing_tracks:0, get_album_calls:0},   //for updating progress meter when recursively filtering songs
-    current_operation_number = 0;
+var customLocalStorage = new CustomLocalStorage('srsr');
+var database;
+var cached_data;
+var spotify_credentials = null;
+var global_track_count = 20;
+var recursive_operations = {missing_tracks:0, get_album_calls:0};   //for updating progress meter when recursively filtering song
+var current_operation_number = 0;
 
 function callSpotify(url, data) {
-    if(!user_credentials) return new Promise((resolve, reject) => reject("no user_credentials"));
+    if(!spotify_credentials) return new Promise((resolve, reject) => reject("no spotify_credentials"));
     return $.ajax(url, {
         dataType: 'json',
         data: data,
         headers: {
-            'Authorization': 'Bearer ' + user_credentials.token
+            'Authorization': 'Bearer ' + spotify_credentials.token
         }
     });
 }
@@ -101,7 +86,7 @@ function postSpotify(url, json, callback) {
         data: JSON.stringify(json),
         dataType: 'json',
         headers: {
-            'Authorization': 'Bearer ' + user_credentials.token,
+            'Authorization': 'Bearer ' + spotify_credentials.token,
             'Content-Type': 'application/json'
         },
         success: function (r) {
@@ -126,7 +111,7 @@ function deleteSpotify(url, callback) {
         //data: JSON.stringify(json),
         dataType: 'json',
         headers: {
-            'Authorization': 'Bearer ' + user_credentials.token,
+            'Authorization': 'Bearer ' + spotify_credentials.token,
             'Content-Type': 'application/json'
         },
         success: function (r) {
@@ -339,16 +324,14 @@ const loadApp = function () {
     $("#main-page").removeClass("hidden");
     setTimeout(function(){
         confirm('You need to refresh the page before proceeding') ? location.reload() : location.reload();
-    }, (user_credentials.expires - getTime()) * 1000);
+    }, (spotify_credentials.expires - getTime()) * 1000);
 }
 
 async function performAuthDance() {
     // if we already have a token and it hasn't expired, use it,
-    if ('user_credentials' in customLocalStorage.getContent()) {
-        user_credentials = customLocalStorage.getContent().user_credentials;
-    }
+    spotify_credentials = customLocalStorage.getItem('spotify_credentials');
 
-    if (user_credentials && user_credentials.expires > getTime()) {
+    if (spotify_credentials?.expires > getTime()) {
         console.log("found unexpired token!");
         location.hash = ''; //clear the hash just in case (this can be removed later)
         loadApp();
@@ -377,15 +360,15 @@ async function performAuthDance() {
                 expiresAt = expires + getTime();
             }
 
-            user_credentials = {
+            spotify_credentials = {
                 token: g_access_token,
                 expires: expiresAt
             }
 
             callSpotify('https://api.spotify.com/v1/me').then(
                 function (user) {
-                    user_credentials.user_id = user.id;
-                    customLocalStorage.set("user_credentials", user_credentials);
+                    spotify_credentials.user_id = user.id;
+                    customLocalStorage.setItem("spotify_credentials", spotify_credentials);
                     location.hash = '';
                     loadApp();
                 },
@@ -790,7 +773,7 @@ function createPlaylist(params = {
 }) {
     //create a playlist with the given params, and return the created playlist
     return new Promise((resolve, reject) => {
-        var url = "https://api.spotify.com/v1/users/" + user_credentials.user_id + "/playlists";
+        var url = "https://api.spotify.com/v1/users/" + spotify_credentials.user_id + "/playlists";
         postSpotify(url, params, function (ok, playlist) {
             if (ok) resolve(playlist);
             else {
@@ -927,7 +910,7 @@ async function main(track_count = global_track_count) {
             sessionTimestamp:new Date().getTime(),
             sessionID:new_session.key,
             //sessionStatus:"pending",
-            spotifyUID:user_credentials.user_id,
+            spotifyUID:spotify_credentials.user_id,
             songsRequested:track_count,
             userAgent: navigator.userAgent
         }, function (error) {

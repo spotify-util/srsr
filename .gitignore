@@ -4,3 +4,4 @@ js/progressbar.min.js.map
 js/progressbar.min.js
 js/HackTimer.js
 js/credentials.js
+js/customLocalStorage.js
